@@ -36,6 +36,14 @@ export type ProductCategory = 'food' | 'drink' | 'other'
 export type ProductStatus = 'available' | 'unavailable' | 'deleted'
 export type ProductVolume = 'small' | 'medium' | 'large'
 
+export interface ProductImage {
+  id: number
+  product_id: number
+  url: string
+  is_primary: boolean
+  sort_order: number
+}
+
 export interface Product {
   id: number
   name: string
@@ -45,6 +53,7 @@ export interface Product {
   status: ProductStatus
   created_at: string
   updated_at: string
+  images?: ProductImage[]
 }
 
 export interface ProductCreateData {

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Product, ProductCreateData, ProductStatus } from '@/types'
+import type { Product, ProductCreateData, ProductImage, ProductStatus } from '@/types'
 import api from '@/services/api'
 
 export const useProductsStore = defineStore('products', () => {
@@ -113,6 +113,43 @@ export const useProductsStore = defineStore('products', () => {
     return products.value.find(p => p.id === id)
   }
 
+  const uploadProductImages = async (productId: number, files: File[]) => {
+    try {
+      const images = await api.uploadProductImages(productId, files)
+      const product = products.value.find(p => p.id === productId)
+      if (product) {
+        product.images = product.images || []
+        product.images.push(...images)
+      }
+      return images
+    } catch (e) {
+      throw e
+    }
+  }
+
+  const deleteProductImage = async (productId: number, imageId: number) => {
+    await api.deleteProductImage(productId, imageId)
+    const product = products.value.find(p => p.id === productId)
+    if (product?.images) {
+      product.images = product.images.filter(img => img.id !== imageId)
+    }
+  }
+
+  const setProductImagePrimary = async (productId: number, imageId: number) => {
+    const updated = await api.setProductImagePrimary(productId, imageId)
+    const product = products.value.find(p => p.id === productId)
+    if (product?.images) {
+      product.images = product.images.map(img =>
+        img.id === imageId ? { ...img, is_primary: true } : { ...img, is_primary: false }
+      )
+    }
+    return updated
+  }
+
+  const fetchProductImages = async (productId: number) => {
+    return api.listProductImages(productId)
+  }
+
   return {
     // State
     products,
@@ -129,6 +166,10 @@ export const useProductsStore = defineStore('products', () => {
     createProduct,
     updateProduct,
     deleteProduct,
-    getProductById
+    getProductById,
+    uploadProductImages,
+    deleteProductImage,
+    setProductImagePrimary,
+    fetchProductImages
   }
 })

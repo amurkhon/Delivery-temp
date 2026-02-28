@@ -3,7 +3,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useProductsStore } from '@/stores/products'
 import { useOrdersStore } from '@/stores/orders'
 import { useToast } from '@/composables/useToast'
-import type { ProductCreateData, ProductCategory, ProductVolume } from '@/types'
+import api from '@/services/api'
+import type { Product, ProductCreateData, ProductImage } from '@/types'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -17,7 +18,12 @@ const ordersStore = useOrdersStore()
 const toast = useToast()
 
 const showProductModal = ref(false)
+const showImagesModal = ref(false)
 const isSubmitting = ref(false)
+const isUploadingImages = ref(false)
+const selectedProduct = ref<Product | null>(null)
+const productImages = ref<ProductImage[]>([])
+const imageFileInput = ref<HTMLInputElement | null>(null)
 
 const productForm = ref<ProductCreateData>({
   name: '',
@@ -120,6 +126,82 @@ const handleDeleteProduct = async (id: number, name: string) => {
     toast.error(message)
   }
 }
+
+const openImagesModal = async (product: Product) => {
+  selectedProduct.value = product
+  showImagesModal.value = true
+  try {
+    productImages.value = await productsStore.fetchProductImages(product.id)
+  } catch {
+    productImages.value = product.images || []
+  }
+}
+
+const closeImagesModal = () => {
+  showImagesModal.value = false
+  selectedProduct.value = null
+  productImages.value = []
+  imageFileInput.value = null
+}
+
+const triggerFileInput = () => {
+  imageFileInput.value?.click()
+}
+
+const handleImageFilesSelected = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const files = input.files
+  if (!files?.length || !selectedProduct.value) return
+
+  const validFiles = Array.from(files).filter(f =>
+    ['image/jpeg', 'image/png', 'image/webp'].includes(f.type)
+  )
+  if (validFiles.length === 0) {
+    toast.warning('Please select JPEG, PNG or WebP images')
+    return
+  }
+
+  isUploadingImages.value = true
+  try {
+    await productsStore.uploadProductImages(selectedProduct.value.id, validFiles)
+    productImages.value = await productsStore.fetchProductImages(selectedProduct.value.id)
+    toast.success(`${validFiles.length} image(s) uploaded`)
+    input.value = ''
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to upload images'
+    toast.error(message)
+  } finally {
+    isUploadingImages.value = false
+  }
+}
+
+const handleDeleteImage = async (imageId: number) => {
+  if (!selectedProduct.value || !confirm('Delete this image?')) return
+  try {
+    await productsStore.deleteProductImage(selectedProduct.value.id, imageId)
+    productImages.value = productImages.value.filter(img => img.id !== imageId)
+    toast.success('Image deleted')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to delete image'
+    toast.error(message)
+  }
+}
+
+const handleSetPrimary = async (imageId: number) => {
+  if (!selectedProduct.value) return
+  try {
+    await productsStore.setProductImagePrimary(selectedProduct.value.id, imageId)
+    productImages.value = productImages.value.map(img =>
+      ({ ...img, is_primary: img.id === imageId })
+    )
+    toast.success('Primary image updated')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to set primary'
+    toast.error(message)
+  }
+}
+
+const getImageUrl = (url: string) => api.getImageUrl(url)
 </script>
 
 <template>
@@ -210,6 +292,7 @@ const handleDeleteProduct = async (id: number, name: string) => {
                 <th>Price</th>
                 <th>Size</th>
                 <th>Status</th>
+                <th>Images</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -237,6 +320,15 @@ const handleDeleteProduct = async (id: number, name: string) => {
                   >
                     {{ product.status }}
                   </span>
+                </td>
+                <td>
+                  <BaseButton
+                    size="sm"
+                    variant="secondary"
+                    @click="openImagesModal(product)"
+                  >
+                    {{ (product.images?.length || 0) }} 📷
+                  </BaseButton>
                 </td>
                 <td>
                   <BaseButton
@@ -299,6 +391,59 @@ const handleDeleteProduct = async (id: number, name: string) => {
         >
           Create Product
         </BaseButton>
+      </template>
+    </BaseModal>
+
+    <!-- Image Management Modal -->
+    <BaseModal
+      v-model="showImagesModal"
+      :title="`Manage Images: ${selectedProduct?.name ?? ''}`"
+      size="lg"
+    >
+      <div v-if="selectedProduct" class="images-management">
+        <input
+          ref="imageFileInput"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          class="hidden-input"
+          @change="handleImageFilesSelected"
+        />
+        <div class="upload-zone" @click="triggerFileInput">
+          <span v-if="!isUploadingImages">📤 Click to upload images (JPEG, PNG, WebP)</span>
+          <span v-else>Uploading...</span>
+        </div>
+        <div v-if="productImages.length" class="images-grid">
+          <div
+            v-for="img in productImages"
+            :key="img.id"
+            class="image-item"
+            :class="{ primary: img.is_primary }"
+          >
+            <img :src="getImageUrl(img.url)" :alt="`Product image ${img.id}`" class="image-preview" />
+            <div class="image-actions">
+              <BaseButton
+                v-if="!img.is_primary"
+                size="sm"
+                @click="handleSetPrimary(img.id)"
+              >
+                Set Primary
+              </BaseButton>
+              <span v-else class="primary-badge">Primary</span>
+              <BaseButton
+                variant="danger"
+                size="sm"
+                @click="handleDeleteImage(img.id)"
+              >
+                Delete
+              </BaseButton>
+            </div>
+          </div>
+        </div>
+        <p v-else class="no-images">No images yet. Upload some above.</p>
+      </div>
+      <template #footer>
+        <BaseButton @click="closeImagesModal">Close</BaseButton>
       </template>
     </BaseModal>
   </div>
@@ -558,5 +703,75 @@ const handleDeleteProduct = async (id: number, name: string) => {
     gap: 1rem;
     align-items: flex-start;
   }
+}
+
+.hidden-input {
+  display: none;
+}
+
+.images-management {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.upload-zone {
+  padding: 2rem;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+
+.upload-zone:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.images-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1rem;
+}
+
+.image-item {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid var(--border);
+}
+
+.image-item.primary {
+  border-color: var(--primary);
+}
+
+.image-preview {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+
+.image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--surface-light);
+}
+
+.primary-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+  padding: 0.25rem 0.5rem;
+}
+
+.no-images {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 1rem;
 }
 </style>

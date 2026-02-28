@@ -4,6 +4,7 @@ import type {
   AuthResponse,
   Product,
   ProductCreateData,
+  ProductImage,
   ProductStatus,
   Order,
   OrderCreateData,
@@ -25,6 +26,27 @@ class ApiService {
         'Content-Type': 'application/json',
         ...options.headers
       },
+      credentials: 'include'
+    }
+
+    const response = await fetch(url, config)
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Request failed' }))
+      throw new Error(error.detail || `HTTP ${response.status}`)
+    }
+
+    return response.json()
+  }
+
+  private async requestMultipart<T>(
+    endpoint: string,
+    formData: FormData
+  ): Promise<T> {
+    const url = `${API_BASE}${endpoint}`
+    const config: RequestInit = {
+      method: 'POST',
+      body: formData,
       credentials: 'include'
     }
 
@@ -92,6 +114,33 @@ class ApiService {
     return this.request<Product>(`/product/delete/${id}`, {
       method: 'DELETE'
     })
+  }
+
+  async uploadProductImages(productId: number, files: File[]): Promise<ProductImage[]> {
+    const formData = new FormData()
+    files.forEach((file) => formData.append('files', file))
+    return this.requestMultipart<ProductImage[]>(`/product/${productId}/images`, formData)
+  }
+
+  async listProductImages(productId: number): Promise<ProductImage[]> {
+    return this.request<ProductImage[]>(`/product/${productId}/images`)
+  }
+
+  async deleteProductImage(productId: number, imageId: number): Promise<{ success: boolean }> {
+    return this.request(`/product/${productId}/images/${imageId}`, {
+      method: 'DELETE'
+    })
+  }
+
+  async setProductImagePrimary(productId: number, imageId: number): Promise<ProductImage> {
+    return this.request<ProductImage>(`/product/${productId}/images/${imageId}/primary`, {
+      method: 'PUT'
+    })
+  }
+
+  getImageUrl(url: string): string {
+    if (url.startsWith('http')) return url
+    return `${API_BASE.replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`
   }
 
   // ==================== ORDERS ====================

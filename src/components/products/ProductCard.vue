@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { Product } from '@/types'
 import { useCartStore } from '@/stores/cart'
 import { useToast } from '@/composables/useToast'
+import api from '@/services/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
 interface Props {
@@ -13,6 +14,44 @@ const props = defineProps<Props>()
 
 const cartStore = useCartStore()
 const toast = useToast()
+const currentImageIndex = ref(0)
+
+const sortedImages = computed(() => {
+  const images = props.product.images || []
+  if (!images.length) return []
+  return [...images].sort((a, b) => {
+    if (a.is_primary) return -1
+    if (b.is_primary) return 1
+    return a.sort_order - b.sort_order
+  })
+})
+
+const currentImageUrl = computed(() => {
+  const images = sortedImages.value
+  if (!images.length) return null
+  const img = images[currentImageIndex.value] || images[0]
+  return api.getImageUrl(img.url)
+})
+
+const hasMultipleImages = computed(() => sortedImages.value.length > 1)
+
+const showPrevImage = () => {
+  const len = sortedImages.value.length
+  if (len > 1) {
+    currentImageIndex.value = (currentImageIndex.value - 1 + len) % len
+  }
+}
+
+const showNextImage = () => {
+  const len = sortedImages.value.length
+  if (len > 1) {
+    currentImageIndex.value = (currentImageIndex.value + 1) % len
+  }
+}
+
+watch(() => props.product.id, () => {
+  currentImageIndex.value = 0
+})
 
 const categoryIcon = computed(() => {
   const icons: Record<string, string> = {
@@ -68,7 +107,42 @@ const decrementQuantity = () => {
 <template>
   <div class="product-card" :class="{ unavailable: !isAvailable }">
     <div class="product-image">
-      <span class="product-icon">{{ categoryIcon }}</span>
+      <img
+        v-if="currentImageUrl"
+        :src="currentImageUrl"
+        :alt="product.name"
+        class="product-photo"
+      />
+      <span v-else class="product-icon">{{ categoryIcon }}</span>
+      <button
+        v-if="hasMultipleImages"
+        type="button"
+        class="carousel-btn carousel-prev"
+        aria-label="Previous image"
+        @click.stop="showPrevImage"
+      >
+        ‹
+      </button>
+      <button
+        v-if="hasMultipleImages"
+        type="button"
+        class="carousel-btn carousel-next"
+        aria-label="Next image"
+        @click.stop="showNextImage"
+      >
+        ›
+      </button>
+      <div v-if="hasMultipleImages" class="carousel-dots">
+        <button
+          v-for="(_, i) in sortedImages"
+          :key="i"
+          type="button"
+          class="carousel-dot"
+          :class="{ active: i === currentImageIndex }"
+          :aria-label="`Go to image ${i + 1}`"
+          @click.stop="currentImageIndex = i"
+        />
+      </div>
       <span class="product-category">{{ product.product_category }}</span>
       <span class="product-volume">{{ volumeLabel }}</span>
     </div>
@@ -130,11 +204,17 @@ const decrementQuantity = () => {
 
 .product-image {
   position: relative;
-  height: 160px;
+  height: 240px;
   background: linear-gradient(135deg, var(--surface-light) 0%, var(--surface) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.product-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .product-icon {
@@ -169,6 +249,67 @@ const decrementQuantity = () => {
   font-size: 0.8rem;
   font-weight: 700;
   color: white;
+}
+
+.carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: var(--transition);
+  z-index: 2;
+}
+
+.carousel-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.carousel-prev {
+  left: 0.5rem;
+}
+
+.carousel-next {
+  right: 0.5rem;
+}
+
+.carousel-dots {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.35rem;
+  z-index: 2;
+}
+
+.carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.carousel-dot:hover {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.carousel-dot.active {
+  background: white;
+  width: 10px;
+  height: 10px;
 }
 
 .product-body {
