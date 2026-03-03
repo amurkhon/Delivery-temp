@@ -1,5 +1,5 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Build stage - Node 20 required (copy-anything@4+ needs >=18)
+FROM node:20.18.0-alpine AS builder
 
 WORKDIR /app
 
