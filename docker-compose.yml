@@ -1,7 +1,24 @@
 services:
   frontend:
     build: .
+    image: node:20-alpine
     container_name: delivery-frontend
     restart: always
     ports:
       - "6000:80"
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+  backend:
+    build: ../delivery
+
+  network:
+    name: delivery-network
+    driver: bridge
