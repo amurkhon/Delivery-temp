@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Product, ProductCreateData, ProductImage, ProductStatus } from '@/types'
+import type { Product, ProductCreateData, ProductStatus } from '@/types'
 import api from '@/services/api'
 
 export const useProductsStore = defineStore('products', () => {

@@ -3,7 +3,6 @@ import { onMounted, computed, ref } from 'vue'
 import { useProductsStore } from '@/stores/products'
 import { useCartStore } from '@/stores/cart'
 import ProductCard from '@/components/products/ProductCard.vue'
-import BaseCard from '@/components/ui/BaseCard.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 

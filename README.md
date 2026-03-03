@@ -95,11 +95,57 @@ yarn preview
 
 ### Environment Variables
 
-Create a `.env` file:
+Create a `.env` file for development:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8000
 ```
+
+For production, use `.env.production` (loaded automatically when building):
+
+```env
+VITE_API_BASE_URL=http://72.61.116.31:8000
+```
+
+## Deployment
+
+### Build for Production
+
+```bash
+yarn install
+yarn build
+```
+
+Output is in `dist/`. The build uses `.env.production` for the API URL.
+
+### Deploy Script
+
+```bash
+./deploy.sh
+```
+
+### Docker
+
+```bash
+docker compose up -d
+```
+
+Or with explicit build:
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+The app will be served at `http://localhost:6000` (or your server IP:6000).
+
+### Serving the Build
+
+- **npx serve**: `npx serve -s dist -l 6000`
+- **Docker**: See above
+- **nginx**: Copy `dist/` contents to your web root and use the SPA fallback (`try_files $uri $uri/ /index.html`)
+
+Ensure the backend API is running and CORS allows your frontend origin (e.g. `http://72.61.116.31:6000`).
 
 ## API Integration
 

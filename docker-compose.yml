@@ -1,0 +1,7 @@
+services:
+  frontend:
+    build: .
+    container_name: delivery-frontend
+    restart: always
+    ports:
+      - "6000:80"

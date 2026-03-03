@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth'
-import { useCartStore } from '@/stores/cart'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import CartSidebar from '@/components/cart/CartSidebar.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 
 const authStore = useAuthStore()
-const cartStore = useCartStore()
 </script>
 
 <template>
