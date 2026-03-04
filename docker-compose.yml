@@ -2,7 +2,7 @@ services:
   delivery-app:
     container_name: delivery-frontend
     restart: always
-    image: node:20.10.0
+    image: node:22.12.0
     ports:
       - "6000:4000"
     environment:
