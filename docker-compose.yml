@@ -1,10 +1,19 @@
 services:
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: delivery-frontend:latest
+  delivery-app:
     container_name: delivery-frontend
     restart: always
+    image: node:20.10.0
     ports:
-      - "6000:80"
+      - "6000:4000"
+    environment:
+      - PORT=4000
+    volumes:
+      - ./:/usr/src/delivery-app
+    working_dir: /usr/src/delivery-app
+    networks:
+      - client-network
+    command: bash -c "yarn && yarn run build && yarn run start"
+
+networks:
+  client-network:
+    driver: bridge

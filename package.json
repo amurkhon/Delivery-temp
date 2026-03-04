@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "build:prod": "vite build --mode production",
+    "start": "vite preview --host 0.0.0.0 --port 4000",
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix"
   },
