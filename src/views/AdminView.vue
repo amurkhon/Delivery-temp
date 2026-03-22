@@ -2,9 +2,11 @@
 import { ref, onMounted, computed } from 'vue'
 import { useProductsStore } from '@/stores/products'
 import { useOrdersStore } from '@/stores/orders'
+import { useUsersStore } from '@/stores/users'
+import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
-import type { Product, ProductCreateData, ProductImage } from '@/types'
+import type { Product, ProductCreateData, ProductImage, User, UserRole } from '@/types'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -15,15 +17,28 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 
 const productsStore = useProductsStore()
 const ordersStore = useOrdersStore()
+const usersStore = useUsersStore()
+const authStore = useAuthStore()
 const toast = useToast()
 
 const showProductModal = ref(false)
 const showImagesModal = ref(false)
+const showEditUserModal = ref(false)
 const isSubmitting = ref(false)
 const isUploadingImages = ref(false)
 const selectedProduct = ref<Product | null>(null)
+const selectedUser = ref<User | null>(null)
 const productImages = ref<ProductImage[]>([])
 const imageFileInput = ref<HTMLInputElement | null>(null)
+const userSearch = ref('')
+const userRoleFilter = ref<'all' | UserRole>('all')
+const userStatusFilter = ref<'all' | 'active' | 'inactive'>('all')
+
+const userForm = ref({
+  username: '',
+  email: '',
+  is_staff: false
+})
 
 const productForm = ref<ProductCreateData>({
   name: '',
@@ -44,6 +59,25 @@ const volumeOptions = [
   { value: 'large', label: 'Large (L)' }
 ]
 
+const userRoleFilterOptions = [
+  { value: 'all', label: 'All Roles' },
+  { value: 'member', label: 'Member' },
+  { value: 'staff', label: 'Staff' },
+  { value: 'admin', label: 'Admin' }
+]
+
+const userRoleEditOptions = [
+  { value: 'member', label: 'Member' },
+  { value: 'staff', label: 'Staff' },
+  { value: 'admin', label: 'Admin' }
+]
+
+const userStatusOptions = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' }
+]
+
 const stats = computed(() => ({
   totalProducts: productsStore.totalProducts,
   totalOrders: ordersStore.totalOrders,
@@ -51,10 +85,13 @@ const stats = computed(() => ({
   totalRevenue: ordersStore.totalRevenue
 }))
 
+const currentUser = computed(() => authStore.user)
+
 onMounted(async () => {
   await Promise.all([
     productsStore.fetchProducts(),
-    ordersStore.fetchOrders()
+    ordersStore.fetchOrders(),
+    usersStore.fetchUsers()
   ])
 })
 
@@ -202,6 +239,118 @@ const handleSetPrimary = async (imageId: number) => {
 }
 
 const getImageUrl = (url: string) => api.getImageUrl(url)
+
+const hasStaffAccess = (user: User) => user.is_staff || user.role === 'staff' || user.role === 'admin'
+
+const syncCurrentUser = (user: User) => {
+  if (currentUser.value?.id === user.id) {
+    authStore.setUser(user)
+  }
+}
+
+const fetchUsers = async () => {
+  await usersStore.fetchUsers({
+    role: userRoleFilter.value === 'all' ? undefined : userRoleFilter.value,
+    is_active:
+      userStatusFilter.value === 'all'
+        ? undefined
+        : userStatusFilter.value === 'active',
+    q: userSearch.value.trim() || undefined
+  })
+}
+
+const resetUserFilters = async () => {
+  userSearch.value = ''
+  userRoleFilter.value = 'all'
+  userStatusFilter.value = 'all'
+  await fetchUsers()
+}
+
+const openEditUserModal = (user: User) => {
+  selectedUser.value = user
+  userForm.value = {
+    username: user.username,
+    email: user.email,
+    is_staff: user.is_staff
+  }
+  showEditUserModal.value = true
+}
+
+const closeEditUserModal = () => {
+  selectedUser.value = null
+  showEditUserModal.value = false
+}
+
+const handleUpdateUser = async () => {
+  if (!selectedUser.value) return
+
+  const payload: { username?: string; email?: string; is_staff?: boolean } = {}
+  const username = userForm.value.username.trim()
+  const email = userForm.value.email.trim()
+
+  if (username && username !== selectedUser.value.username) payload.username = username
+  if (email && email !== selectedUser.value.email) payload.email = email
+  if (userForm.value.is_staff !== selectedUser.value.is_staff) {
+    if (selectedUser.value.id === currentUser.value?.id && !userForm.value.is_staff) {
+      toast.warning('You cannot remove your own staff flag')
+      return
+    }
+    payload.is_staff = userForm.value.is_staff
+  }
+
+  if (Object.keys(payload).length === 0) {
+    toast.warning('No changes to save')
+    return
+  }
+
+  try {
+    const updated = await usersStore.updateUser(selectedUser.value.id, payload)
+    syncCurrentUser(updated)
+    toast.success('User updated successfully')
+    closeEditUserModal()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update user'
+    toast.error(message)
+  }
+}
+
+const handleChangeUserRole = async (user: User, value: string | number) => {
+  const role = String(value) as UserRole
+
+  if (role === user.role) return
+
+  if (user.id === currentUser.value?.id) {
+    toast.warning('You cannot change your own role')
+    return
+  }
+
+  try {
+    const updated = await usersStore.updateUserRole(user.id, role)
+    console.log("updated: ", updated)
+    syncCurrentUser(updated)
+    toast.success(`Role updated to ${role}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update role'
+    toast.error(message)
+  }
+}
+
+const handleToggleUserStatus = async (user: User) => {
+  const nextStatus = !user.is_active
+  if (user.id === currentUser.value?.id && !nextStatus) {
+    toast.warning('You cannot deactivate your own account')
+    return
+  }
+
+  try {
+    const updated = await usersStore.updateUserStatus(user.id, { is_active: nextStatus })
+    syncCurrentUser(updated)
+    toast.success(`User ${nextStatus ? 'activated' : 'deactivated'}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update status'
+    toast.error(message)
+  }
+}
 </script>
 
 <template>
@@ -344,6 +493,104 @@ const getImageUrl = (url: string) => api.getImageUrl(url)
           </table>
         </div>
       </BaseCard>
+
+      <BaseCard class="users-card">
+        <div class="card-header users-header">
+          <h2 class="card-title">Users Management</h2>
+          <div class="users-tools">
+            <BaseButton variant="secondary" size="sm" @click="resetUserFilters">
+              Reset
+            </BaseButton>
+            <BaseButton size="sm" @click="fetchUsers">
+              Apply Filters
+            </BaseButton>
+          </div>
+        </div>
+
+        <div class="users-filters">
+          <BaseInput
+            v-model="userSearch"
+            label="Search"
+            placeholder="Username or email"
+          />
+          <BaseSelect
+            v-model="userRoleFilter"
+            :options="userRoleFilterOptions"
+            label="Role"
+          />
+          <BaseSelect
+            v-model="userStatusFilter"
+            :options="userStatusOptions"
+            label="Status"
+          />
+        </div>
+
+        <div v-if="usersStore.isLoading" class="loading-container">
+          <LoadingSpinner size="lg" center />
+        </div>
+
+        <div v-else-if="usersStore.users.length === 0">
+          <EmptyState
+            icon="👥"
+            title="No users found"
+            description="Try changing your filters or search query"
+          />
+        </div>
+
+        <div v-else class="products-table-container">
+          <table class="products-table users-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Staff</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="user in usersStore.users" :key="user.id">
+                <td>#{{ user.id }}</td>
+                <td>{{ user.username }}</td>
+                <td>{{ user.email }}</td>
+                <td>
+                  <BaseSelect
+                    :model-value="user.role"
+                    :options="userRoleEditOptions"
+                    @update:model-value="handleChangeUserRole(user, $event)"
+                  />
+                </td>
+                <td>
+                  <span class="status-badge" :class="hasStaffAccess(user) ? 'status-available' : 'status-unavailable'">
+                    {{ hasStaffAccess(user) ? 'Staff' : 'No' }}
+                  </span>
+                </td>
+                <td>
+                  <span class="status-badge" :class="user.is_active ? 'status-available' : 'status-deleted'">
+                    {{ user.is_active ? 'Active' : 'Inactive' }}
+                  </span>
+                </td>
+                <td>
+                  <div class="user-actions">
+                    <BaseButton size="sm" variant="secondary" @click="openEditUserModal(user)">
+                      Edit
+                    </BaseButton>
+                    <BaseButton
+                      size="sm"
+                      :variant="user.is_active ? 'danger' : 'success'"
+                      @click="handleToggleUserStatus(user)"
+                    >
+                      {{ user.is_active ? 'Deactivate' : 'Activate' }}
+                    </BaseButton>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </BaseCard>
     </div>
 
     <!-- Create Product Modal -->
@@ -446,6 +693,42 @@ const getImageUrl = (url: string) => api.getImageUrl(url)
         <BaseButton @click="closeImagesModal">Close</BaseButton>
       </template>
     </BaseModal>
+
+    <BaseModal
+      v-model="showEditUserModal"
+      :title="`Edit User: ${selectedUser?.username ?? ''}`"
+      size="md"
+    >
+      <form @submit.prevent="handleUpdateUser">
+        <BaseInput
+          v-model="userForm.username"
+          label="Username"
+          placeholder="Enter username"
+          required
+        />
+
+        <BaseInput
+          v-model="userForm.email"
+          type="email"
+          label="Email"
+          placeholder="Enter email"
+          required
+        />
+
+        <label class="staff-checkbox">
+          <input v-model="userForm.is_staff" type="checkbox" />
+          <span>Staff privileges</span>
+        </label>
+      </form>
+      <template #footer>
+        <BaseButton variant="secondary" @click="closeEditUserModal">
+          Cancel
+        </BaseButton>
+        <BaseButton :loading="usersStore.isMutating" @click="handleUpdateUser">
+          Save Changes
+        </BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -546,6 +829,50 @@ const getImageUrl = (url: string) => api.getImageUrl(url)
 .products-card {
   padding: 0;
   overflow: hidden;
+}
+
+.users-card {
+  margin-top: 2rem;
+  padding: 0;
+  overflow: hidden;
+}
+
+.users-header {
+  gap: 1rem;
+}
+
+.users-tools {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.users-filters {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 1rem;
+  padding: 1rem 1.5rem 0;
+}
+
+.users-table td :deep(.form-group) {
+  margin-bottom: 0;
+}
+
+.user-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.staff-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.staff-checkbox input {
+  width: 16px;
+  height: 16px;
 }
 
 .card-header {
@@ -664,6 +991,10 @@ const getImageUrl = (url: string) => api.getImageUrl(url)
 }
 
 @media (max-width: 900px) {
+  .users-filters {
+    grid-template-columns: 1fr;
+  }
+
   .products-table th,
   .products-table td {
     padding: 0.75rem 1rem;
@@ -702,6 +1033,14 @@ const getImageUrl = (url: string) => api.getImageUrl(url)
     flex-direction: column;
     gap: 1rem;
     align-items: flex-start;
+  }
+
+  .users-tools {
+    width: 100%;
+  }
+
+  .user-actions {
+    flex-direction: column;
   }
 }
 

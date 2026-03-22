@@ -1,9 +1,11 @@
 // User types
+export type UserRole = 'admin' | 'member' | 'staff'
+
 export interface User {
   id: number
   username: string
   email: string
-  role: 'admin' | 'member'
+  role: UserRole
   is_active: boolean
   is_staff: boolean
   created_at: string
@@ -29,6 +31,26 @@ export interface AuthResponse {
     access_token: string
     refresh_token: string 
   }
+}
+
+export interface UsersQueryParams {
+  role?: UserRole
+  is_active?: boolean
+  q?: string
+}
+
+export interface UserAdminUpdateData {
+  username?: string
+  email?: string
+  is_staff?: boolean
+}
+
+export interface UserRoleUpdateData {
+  role: UserRole
+}
+
+export interface UserStatusUpdateData {
+  is_active: boolean
 }
 
 // Product types

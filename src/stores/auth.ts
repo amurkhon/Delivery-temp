@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { User, SignUpData, SignInData, AuthResponse } from '@/types'
+import type { User, SignUpData, SignInData, AuthResponse, UserRole } from '@/types'
 import api from '@/services/api'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -9,7 +9,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = ref(false)
 
   // Getters
-  const isAdmin = computed(() => user.value?.is_staff)
+  const isAdmin = computed(() => user.value?.role === 'admin')
   const username = computed(() => user.value?.username || '')
 
   // Actions
@@ -54,7 +54,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = true
   }
 
-  const updateUserRole = (role: 'admin' | 'member') => {
+  const updateUserRole = (role: UserRole) => {
     if (user.value) {
       user.value.role = role
     }

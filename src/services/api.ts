@@ -9,7 +9,11 @@ import type {
   Order,
   OrderCreateData,
   OrderUpdateData,
-  User
+  User,
+  UsersQueryParams,
+  UserAdminUpdateData,
+  UserRoleUpdateData,
+  UserStatusUpdateData
 } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
@@ -84,6 +88,46 @@ class ApiService {
 
   async refreshToken(): Promise<AuthResponse> {
     return this.request<AuthResponse>('/auth/signin/refresh')
+  }
+
+  // ==================== USERS ====================
+
+  async getUsers(params: UsersQueryParams = {}): Promise<User[]> {
+    const queryParams = new URLSearchParams()
+
+    if (params.role) queryParams.set('role', params.role)
+    if (typeof params.is_active === 'boolean') {
+      queryParams.set('is_active', String(params.is_active))
+    }
+    if (params.q?.trim()) queryParams.set('q', params.q.trim())
+
+    const query = queryParams.toString()
+    return this.request<User[]>(`/user/all/list${query ? `?${query}` : ''}`)
+  }
+
+  async getUser(userId: number): Promise<User> {
+    return this.request<User>(`/user/${userId}`)
+  }
+
+  async updateUser(userId: number, data: UserAdminUpdateData): Promise<User> {
+    return this.request<User>(`/user/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async updateUserRole(userId: number, data: UserRoleUpdateData): Promise<User> {
+    return this.request<User>(`/user/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async updateUserStatus(userId: number, data: UserStatusUpdateData): Promise<User> {
+    return this.request<User>(`/user/${userId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    })
   }
 
   // ==================== PRODUCTS ====================
